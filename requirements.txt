@@ -3,3 +3,4 @@ speechrecognition==3.8.1
 gensim==3.8.3
 scipy==1.7.1
 numpy==1.21.0
+setuptools>=58.0.0
