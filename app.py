@@ -1,14 +1,24 @@
 from flask import Flask, request, jsonify
 import os
+import boto3
 import speech_recognition as sr
 from gensim.summarization import summarize
 
 app = Flask(__name__)
+
+# Configurar boto3
+s3 = boto3.client('s3',
+                  aws_access_key_id='SUA_CHAVE_DE_ACESSO',
+                  aws_secret_access_key='SUA_CHAVE_SECRETA',
+                  region_name='SUA_REGIAO')
+
+BUCKET_NAME = 'SEU_BUCKET'
+
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2 GB
 
-def transcribe_audio(audio_file):
+def transcribe_audio(audio_file_path):
     recognizer = sr.Recognizer()
-    with sr.AudioFile(audio_file) as source:
+    with sr.AudioFile(audio_file_path) as source:
         audio = recognizer.record(source)
     try:
         text = recognizer.recognize_google(audio, language="pt-BR")
@@ -24,38 +34,37 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    app.logger.info("Recebendo requisição no endpoint /upload")
-
     if 'file' not in request.files:
-        app.logger.error("Nenhum arquivo enviado no campo 'file'")
         return jsonify({"error": "Nenhum arquivo enviado"}), 400
 
     file = request.files['file']
-    part_num = request.form['part']
+    filename = file.filename
+
+    # Salvar arquivo localmente
+    file.save(filename)
+
+    # Fazer upload do arquivo para o S3
+    s3.upload_file(filename, BUCKET_NAME, filename)
+
+    # Remover o arquivo localmente
+    os.remove(filename)
+
+    return jsonify({"message": f"Arquivo {filename} enviado com sucesso."}), 200
+
+@app.route('/process', methods=['POST'])
+def process_file():
     filename = request.form['filename']
-    
-    part_filename = f"{filename}.part{part_num}"
-    file.save(part_filename)
-    app.logger.info(f"Parte {part_num} do arquivo {filename} recebida.")
 
-    return jsonify({"message": f"Parte {part_num} recebida com sucesso."}), 200
+    # Baixar o arquivo do S3
+    s3.download_file(BUCKET_NAME, filename, filename)
 
-@app.route('/merge', methods=['POST'])
-def merge_file():
-    filename = request.form['filename']
-    part_count = int(request.form['part_count'])
-    full_filename = f"{filename}_full.wav"
-
-    with open(full_filename, 'wb') as full_file:
-        for part_num in range(1, part_count + 1):
-            part_filename = f"{filename}.part{part_num}"
-            with open(part_filename, 'rb') as part_file:
-                full_file.write(part_file.read())
-            os.remove(part_filename)
-    
-    transcribed_text = transcribe_audio(full_filename)
+    # Transcrever e sumarizar o arquivo
+    transcribed_text = transcribe_audio(filename)
     summary = summarize(transcribed_text, ratio=0.3)
-    
+
+    # Remover o arquivo localmente
+    os.remove(filename)
+
     return jsonify({
         "transcription": transcribed_text,
         "summary": summary

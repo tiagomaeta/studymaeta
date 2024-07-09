@@ -13,21 +13,20 @@ def divide_arquivo(file_path, tamanho_parte=50 * 1024 * 1024):  # 50 MB
                 parte_file.write(dados)
             parte += 1
 
-def upload_part(file_path, part_num, url, filename):
-    files = {'file': open(file_path, 'rb')}
-    data = {'part': part_num, 'filename': filename}
-    response = requests.post(url, files=files, data=data)
-    return response
-
-def merge_parts(filename, total_parts, merge_url):
-    merge_data = {'filename': filename, 'part_count': total_parts}
-    response = requests.post(merge_url, data=merge_data)
-    return response
+def upload_part_s3(file_path, part_num, s3_client, bucket_name, filename):
+    part_filename = f"{filename}.part{part_num}"
+    s3_client.upload_file(file_path, bucket_name, part_filename)
+    return f"Parte {part_num} enviada com sucesso."
 
 def main():
+    import boto3
+
+    s3 = boto3.client('s3',
+                      aws_access_key_id='SUA_CHAVE_DE_ACESSO',
+                      aws_secret_access_key='SUA_CHAVE_SECRETA',
+                      region_name='SUA_REGIAO')
+
     file_path = "seu_arquivo_grande.wav"
-    url = 'https://studymaeta-production.up.railway.app/upload'
-    merge_url = 'https://studymaeta-production.up.railway.app/merge'
     divide_arquivo(file_path)
 
     file_name = os.path.basename(file_path)
@@ -35,11 +34,8 @@ def main():
 
     for part in parts:
         part_num = part.split('.')[-1].replace('part', '')
-        response = upload_part(part, part_num, url, file_name)
-        print(response.json())
-
-    response = merge_parts(file_name, len(parts), merge_url)
-    print(response.json())
+        message = upload_part_s3(part, part_num, s3, 'SEU_BUCKET', file_name)
+        print(message)
 
 if __name__ == "__main__":
     main()
