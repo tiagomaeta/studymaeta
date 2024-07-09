@@ -16,6 +16,10 @@ def transcribe_audio(audio_file):
     except sr.RequestError:
         return "Erro ao conectar com o serviço de reconhecimento"
 
+@app.route('/')
+def index():
+    return "Serviço de transcrição e sumarização de áudio está ativo!"
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -23,6 +27,9 @@ def upload_file():
 
     file = request.files['file']
     transcribed_text = transcribe_audio(file)
+    if transcribed_text.startswith("Erro"):
+        return jsonify({"error": transcribed_text}), 500
+
     summary = summarize(transcribed_text, ratio=0.3)
 
     return jsonify({
