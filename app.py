@@ -3,6 +3,7 @@ import speech_recognition as sr
 from gensim.summarization import summarize
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
 
 def transcribe_audio(audio_file):
     recognizer = sr.Recognizer()
@@ -22,20 +23,27 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    app.logger.info("Recebendo requisição no endpoint /upload")
+
     if 'file' not in request.files:
+        app.logger.error("Nenhum arquivo enviado no campo 'file'")
         return jsonify({"error": "Nenhum arquivo enviado"}), 400
 
     file = request.files['file']
-    transcribed_text = transcribe_audio(file)
-    if transcribed_text.startswith("Erro"):
-        return jsonify({"error": transcribed_text}), 500
+    app.logger.info(f"Arquivo recebido: {file.filename}")
 
-    summary = summarize(transcribed_text, ratio=0.3)
+    try:
+        transcribed_text = transcribe_audio(file)
+        summary = summarize(transcribed_text, ratio=0.3)
 
-    return jsonify({
-        "transcription": transcribed_text,
-        "summary": summary
-    })
+        app.logger.info("Transcrição e sumarização bem-sucedidas")
+        return jsonify({
+            "transcription": transcribed_text,
+            "summary": summary
+        })
+    except Exception as e:
+        app.logger.error(f"Erro durante a transcrição: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
