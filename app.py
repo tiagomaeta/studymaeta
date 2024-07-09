@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import os
 import speech_recognition as sr
 from gensim.summarization import summarize
 
@@ -30,20 +31,35 @@ def upload_file():
         return jsonify({"error": "Nenhum arquivo enviado"}), 400
 
     file = request.files['file']
-    app.logger.info(f"Arquivo recebido: {file.filename}")
+    part_num = request.form['part']
+    filename = request.form['filename']
+    
+    part_filename = f"{filename}.part{part_num}"
+    file.save(part_filename)
+    app.logger.info(f"Parte {part_num} do arquivo {filename} recebida.")
 
-    try:
-        transcribed_text = transcribe_audio(file)
-        summary = summarize(transcribed_text, ratio=0.3)
+    return jsonify({"message": f"Parte {part_num} recebida com sucesso."}), 200
 
-        app.logger.info("Transcrição e sumarização bem-sucedidas")
-        return jsonify({
-            "transcription": transcribed_text,
-            "summary": summary
-        })
-    except Exception as e:
-        app.logger.error(f"Erro durante a transcrição: {e}")
-        return jsonify({"error": str(e)}), 500
+@app.route('/merge', methods=['POST'])
+def merge_file():
+    filename = request.form['filename']
+    part_count = int(request.form['part_count'])
+    full_filename = f"{filename}_full.wav"
+
+    with open(full_filename, 'wb') as full_file:
+        for part_num in range(1, part_count + 1):
+            part_filename = f"{filename}.part{part_num}"
+            with open(part_filename, 'rb') as part_file:
+                full_file.write(part_file.read())
+            os.remove(part_filename)
+    
+    transcribed_text = transcribe_audio(full_filename)
+    summary = summarize(transcribed_text, ratio=0.3)
+    
+    return jsonify({
+        "transcription": transcribed_text,
+        "summary": summary
+    })
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
