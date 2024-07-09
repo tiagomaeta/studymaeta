@@ -3,7 +3,7 @@ import speech_recognition as sr
 from gensim.summarization import summarize
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB
 
 def transcribe_audio(audio_file):
     recognizer = sr.Recognizer()
